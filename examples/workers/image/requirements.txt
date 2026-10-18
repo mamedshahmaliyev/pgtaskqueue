@@ -1,0 +1,3 @@
+# What only the image worker needs. The API and the general worker never install it —
+# which is the reason a kind of work gets its own worker image.
+pillow>=11.0

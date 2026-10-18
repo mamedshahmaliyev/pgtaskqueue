@@ -1,0 +1,28 @@
+# secrets and local overrides
+.env
+.env.*
+!.env.example
+compose.override.yml
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# editors and OS
+.DS_Store
+.idea/
+.vscode/
+.claude/settings.local.json
+
+# benchmark output that is not the committed report
+benchmarks/results/*.json
+!benchmarks/results/.gitkeep

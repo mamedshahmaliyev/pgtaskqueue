@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block title %}Task {{ task_id[:8] }}{% endblock %}
+{% block scripts %}<script type="module" src="{{ root }}/ui/static/task.js?v={{ static_version }}"></script>{% endblock %}
+{% block main %}<tq-task-detail task-id="{{ task_id }}"></tq-task-detail>{% endblock %}

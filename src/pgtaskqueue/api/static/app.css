@@ -1,0 +1,802 @@
+/* The web UI's one stylesheet. Colours are tokens, defined once for light and once for dark;
+   everything below the tokens is written against roles, never against a hex value. */
+
+:root {
+  color-scheme: light dark;
+  --page: #f4f4f1;
+  --surface: #fcfcfb;
+  --line: #deddd6;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --accent: #1c5cab;
+  --accent-text: #ffffff;
+  --hover: rgb(0 0 0 / 5%);
+  /* Status colours. Each is always shown with a mark and a word beside it. */
+  --good: #0ca30c;
+  --warn: #b97a00;
+  --bad: #d03b3b;
+  --info: #2a78d6;
+  --idle: #8a897f;
+  --bad-surface: #fbeaea;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #121211;
+    --surface: #1a1a19;
+    --line: #383835;
+    --text: #f0efec;
+    --text-2: #c3c2b7;
+    --accent: #6da7ec;
+    --accent-text: #0b0b0b;
+    --hover: rgb(255 255 255 / 7%);
+    --warn: #fab219;
+    --bad: #e66767;
+    --info: #3987e5;
+    --bad-surface: #3a1f1f;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+h2 {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+h2 .more {
+  font-weight: normal;
+}
+
+code,
+pre,
+.log {
+  font-family: var(--mono);
+  font-size: 12.5px;
+}
+
+.muted,
+small {
+  color: var(--text-2);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+main {
+  display: block;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 20px 16px;
+}
+
+main > * > * + * {
+  margin-top: 16px;
+}
+
+footer {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 8px 16px 24px;
+  font-size: 12px;
+}
+
+/* ---------------------------------------------------------------- header */
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.top nav {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.top nav a {
+  padding: 5px 10px;
+  border-radius: 6px;
+  color: var(--text-2);
+}
+
+.top nav a:hover {
+  background: var(--hover);
+  text-decoration: none;
+}
+
+.top nav a[aria-current] {
+  color: var(--text);
+  background: var(--hover);
+  font-weight: 600;
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ---------------------------------------------------------------- controls */
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.1);
+}
+
+button.danger {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+
+button.small {
+  padding: 2px 8px;
+  font-size: 12.5px;
+}
+
+.copyable {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+button.copy {
+  display: inline-flex;
+  padding: 2px;
+  border-color: transparent;
+  background: none;
+  color: var(--text-2);
+}
+
+button.copy:hover:not(:disabled) {
+  color: var(--text);
+}
+
+button.copy svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+}
+
+/* An icon alone: the action's name is its title (the tooltip) and its aria-label. */
+button.icon {
+  display: inline-flex;
+  padding: 4px;
+  color: var(--text-2);
+}
+
+button.icon:hover:not(:disabled) {
+  color: var(--text);
+}
+
+button.icon.danger,
+button.icon.danger:hover:not(:disabled) {
+  color: var(--bad);
+}
+
+button.icon svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+button.quiet,
+button.sort {
+  border-color: transparent;
+  background: none;
+}
+
+button.sort {
+  padding: 0;
+  font-weight: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+input:not([type="checkbox"]),
+select,
+textarea {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+textarea {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  resize: vertical;
+}
+
+select {
+  width: auto;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+label.inline,
+label.chip {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+label.chip {
+  padding: 3px 8px 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+label.chip:has(:checked) {
+  border-color: var(--accent);
+  background: var(--hover);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px 12px;
+  align-items: end;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.buttons.end {
+  justify-content: flex-end;
+}
+
+.heading {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ---------------------------------------------------------------- surfaces */
+
+.card {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 16px;
+}
+
+.columns > * {
+  min-width: 0;
+  margin: 0;
+}
+
+.columns > .wide {
+  grid-column: 1 / -1;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.tile {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.tile .label,
+.tile .note {
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.tile .value {
+  font-size: 26px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile.bad {
+  border-color: var(--bad);
+}
+
+.filters > * + * {
+  margin-top: 12px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.empty {
+  margin: 0;
+  padding: 16px 0;
+  color: var(--text-2);
+  text-align: center;
+}
+
+.error {
+  color: var(--bad);
+}
+
+p.error {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--bad-surface);
+  white-space: pre-wrap;
+}
+
+/* ---------------------------------------------------------------- tables */
+
+.scroll {
+  overflow-x: auto;
+}
+
+.scroll.short {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+th {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+tbody tr:hover {
+  background: var(--hover);
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* On a wrapper, not the cell: a flex <td> is no longer a table cell, so it loses the row's
+   height, border and hover. */
+.row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.clip {
+  display: inline-block;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+/* In the task list, so the table fits without scrolling sideways; the full text is the title. */
+.clip.short {
+  max-width: 160px;
+}
+
+.bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+}
+
+.more-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 10px;
+}
+
+/* ---------------------------------------------------------------- status */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.badge > span {
+  width: 1em;
+  text-align: center;
+  font-weight: 700;
+}
+
+.badge.succeeded > span {
+  color: var(--good);
+}
+
+.badge.failed > span {
+  color: var(--bad);
+}
+
+.badge.running > span {
+  color: var(--info);
+}
+
+.badge.pending > span,
+.badge.scheduled > span {
+  color: var(--warn);
+}
+
+.badge.canceled > span {
+  color: var(--idle);
+}
+
+h1 .badge {
+  font-size: 14px;
+  font-weight: normal;
+  vertical-align: middle;
+}
+
+/* ---------------------------------------------------------------- one task */
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px 20px;
+  margin: 0;
+}
+
+.facts dt {
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.json {
+  max-height: 340px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.log {
+  max-height: 480px;
+  overflow: auto;
+}
+
+.log:empty {
+  display: none;
+}
+
+.line {
+  display: grid;
+  grid-template-columns: max-content 4.5em max-content 1fr;
+  gap: 10px;
+  padding: 1px 0;
+}
+
+.line time {
+  color: var(--text-2);
+}
+
+.line .message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.line.error .level {
+  color: var(--bad);
+}
+
+.line.warning .level {
+  color: var(--warn);
+}
+
+.line.debug {
+  color: var(--text-2);
+}
+
+/* ---------------------------------------------------------------- chart */
+
+.chart {
+  display: block;
+}
+
+.legend {
+  display: flex;
+  gap: 16px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 5px;
+  border-radius: 3px;
+}
+
+.swatch.succeeded,
+.seg.succeeded {
+  background: var(--good);
+  fill: var(--good);
+}
+
+.swatch.failed,
+.seg.failed {
+  background: var(--bad);
+  fill: var(--bad);
+}
+
+.swatch.canceled,
+.seg.canceled {
+  background: var(--idle);
+  fill: var(--idle);
+}
+
+.plot {
+  position: relative;
+}
+
+.plot svg {
+  display: block;
+}
+
+.plot .grid {
+  stroke: var(--line);
+  stroke-dasharray: 2 3;
+}
+
+.plot .axis {
+  stroke: var(--text-2);
+}
+
+.plot .tick {
+  fill: var(--text-2);
+  font-size: 11px;
+}
+
+.plot .target {
+  fill: transparent;
+}
+
+.plot .hover {
+  fill: var(--hover);
+}
+
+.plot .over {
+  position: absolute;
+  inset: 40% 0 auto;
+  padding: 0;
+}
+
+.tip {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  min-width: 150px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 15%);
+  font-size: 12.5px;
+  pointer-events: none;
+}
+
+.tip-title {
+  margin-bottom: 4px;
+  color: var(--text-2);
+}
+
+.tip-row {
+  display: flex;
+  align-items: center;
+}
+
+.tip-row strong {
+  margin-left: auto;
+  padding-left: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+details {
+  margin-top: 6px;
+  font-size: 12.5px;
+}
+
+summary {
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------- dialog, login, toasts */
+
+dialog {
+  width: min(640px, calc(100vw - 32px));
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+
+dialog form > * + *,
+.login form > * + * {
+  margin-top: 12px;
+}
+
+dialog .buttons {
+  justify-content: flex-end;
+}
+
+/* A form's fields line up by their labels; only some have a hint under them. */
+dialog .grid {
+  align-items: start;
+}
+
+dialog h3 {
+  margin: 18px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+tr.inactive td {
+  color: var(--text-2);
+}
+
+.login {
+  max-width: 340px;
+  margin: 12vh auto 0;
+}
+
+.login h1 {
+  margin-bottom: 14px;
+}
+
+.login button {
+  width: 100%;
+}
+
+#toasts {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(420px, calc(100vw - 32px));
+}
+
+.toast {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 15%);
+  white-space: pre-wrap;
+}
+
+.toast.error {
+  border-color: var(--bad);
+}

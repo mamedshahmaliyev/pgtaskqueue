@@ -1,0 +1,93 @@
+[project]
+name = "pgtaskqueue"
+dynamic = ["version"]
+description = "A PostgreSQL-backed task queue for asyncio: SKIP LOCKED claims, heartbeats, per-task logs, JWT/RBAC API and an MCP server."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+keywords = ["task queue", "postgresql", "asyncio", "sqlalchemy", "fastapi", "mcp", "background jobs"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: AsyncIO",
+    "Framework :: FastAPI",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Distributed Computing",
+]
+# The core is what a worker image needs: the queue, the worker and its executors.
+# Everything the HTTP API needs lives in the `api` extra, so a worker that only talks to
+# Postgres does not install a web framework.
+dependencies = [
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30",
+    "alembic>=1.14",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pyjwt[crypto]>=2.10",
+    "argon2-cffi>=23.1",
+    "python-multipart>=0.0.12",
+    "jsonschema>=4.23",
+    # The web UI's templates. Its JavaScript and CSS are plain files in the package.
+    "jinja2>=3.1",
+    "mcp>=2.0",
+    # Request rate limits, counted across API replicas. Only used when TQ_REDIS_URL is set;
+    # queue state never lives in Redis.
+    "redis>=5.2",
+]
+
+[project.scripts]
+tq = "pgtaskqueue.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/pgtaskqueue/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pgtaskqueue"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "examples", "benchmarks"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ASYNC", "S", "SIM", "RUF"]
+ignore = [
+    "S101",   # assert is how tests are written
+    "S311",   # random is used for jitter, never for secrets
+    "B008",   # FastAPI's Depends() in argument defaults
+    "RUF012", # class-level registries are intentional
+    "ASYNC109", # `timeout` here is a task's time limit, stored on the row, not a wait
+    "RUF001", "RUF002", "RUF003", # the docs and comments use typographic punctuation
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S105", "S106", "S603"]
+"benchmarks/**" = ["S603", "S608"]

@@ -1,0 +1,44 @@
+# Local changes to the compose project. Copy to compose.override.yml, which git ignores and
+# `docker compose` merges over compose.yml automatically. Keep what you need, delete the rest.
+#
+# A service receives only the variables listed under its `environment:` — in compose.yml or
+# here — so this file is also where a TQ_ setting that compose.yml does not pass is set.
+# docs/configuration.md lists them all.
+
+services:
+  # --- develop against live code ----------------------------------------------------------
+  # The images install the package in editable mode, so mounting the source over the
+  # image's copy runs your working tree. The API reloads on change; restart a worker to
+  # pick a change up (`docker compose restart worker`).
+  api:
+    volumes:
+      - ./src:/app/src:ro
+    command: ["tq", "api", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  worker:
+    volumes:
+      - ./src:/app/src:ro
+      - ./examples:/app/examples:ro
+    environment:
+      # --- settings compose.yml does not pass ---------------------------------------------
+      TQ_RETENTION_DAYS: 30
+      TQ_DEFAULT_MAX_ATTEMPTS: 5
+      # Recycle the process after this many tasks as well as when idle.
+      TQ_WORKER_MAX_TASKS: 5000
+
+  # --- another worker ---------------------------------------------------------------------
+  # A second queue with its own worker, so a backlog in `default` never delays it.
+  # Enqueue to it with `tq enqueue demo.echo '{}' --queue priority`.
+  worker-priority:
+    image: pgtaskqueue-worker
+    command: ["tq", "worker", "--executors", "examples.executors.basic", "--queue", "priority"]
+    restart: unless-stopped
+    stop_grace_period: 45s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      TQ_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tq}:${POSTGRES_PASSWORD:-tq}@db:5432/${POSTGRES_DB:-task_queue}
+      TQ_WORKER_SLOTS: 5
+      TQ_WORKER_IDLE_EXIT_SECONDS: 900
+      TQ_WEBHOOK_SLOTS: 0

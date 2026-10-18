@@ -1,0 +1,179 @@
+# The whole system on one host: Postgres, the API, and two workers that differ in what they
+# run and what they have installed. `docs/infrastructure.md` explains every service.
+#
+#   cp .env.example .env        # then set TQ_JWT_SECRET and the admin password
+#   docker compose up -d --build
+#
+# Local changes (ports, bind mounts, more workers) belong in compose.override.yml, which
+# compose merges automatically; compose.override.example.yml is a starting point.
+name: pgtaskqueue
+
+x-env: &env
+  TQ_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tq}:${POSTGRES_PASSWORD:-tq}@db:5432/${POSTGRES_DB:-task_queue}
+  # Read by whatever enqueues and by the workers that release held tasks: one value for all.
+  TQ_ACCOUNT_MAX_RUNNING: ${TQ_ACCOUNT_MAX_RUNNING:-0}
+  # Where finished tasks go once they are TQ_ARCHIVE_AFTER_DAYS old; empty archives nothing.
+  # `tq migrate` creates its tables, and any worker may move tasks, so both need it. The
+  # database itself must exist: docs/analytics.md#the-archive.
+  TQ_ARCHIVE_DATABASE_URL: ${TQ_ARCHIVE_DATABASE_URL:-}
+  TQ_ARCHIVE_AFTER_DAYS: ${TQ_ARCHIVE_AFTER_DAYS:-30}
+
+x-worker: &worker
+  # A worker exits on purpose — after TQ_WORKER_IDLE_EXIT_SECONDS with nothing to do, or
+  # after TQ_WORKER_MAX_TASKS — and this policy is what starts the next one: fresh process,
+  # released memory, new database connections, whatever code is now in the image.
+  # `unless-stopped` rather than `always`, so `docker compose stop worker` stays stopped.
+  restart: unless-stopped
+  # Longer than TQ_WORKER_SHUTDOWN_GRACE_SECONDS (30s): compose's SIGTERM starts a graceful
+  # drain, and SIGKILL must not arrive before the worker has released what it could not
+  # finish.
+  stop_grace_period: 45s
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tq}
+      POSTGRES_DB: ${POSTGRES_DB:-task_queue}
+    # Sized for a laptop. docs/infrastructure.md#postgres has what to change for a server.
+    command: >
+      postgres
+        -c max_connections=200
+        -c shared_buffers=512MB
+        -c effective_cache_size=1GB
+        -c work_mem=16MB
+        -c maintenance_work_mem=256MB
+        -c wal_compression=on
+        -c max_wal_size=4GB
+        -c checkpoint_timeout=15min
+        -c autovacuum_naptime=15s
+    shm_size: 512mb
+    volumes:
+      # Postgres 18 images keep their data under /var/lib/postgresql/<major>/, so the
+      # volume is mounted one level higher than it was for 17 and earlier.
+      - db-data:/var/lib/postgresql
+    ports:
+      - "127.0.0.1:${TQ_DB_PORT:-54320}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  # Where the API counts requests for its rate limits, so every replica shares one count.
+  # Nothing else uses it and nothing in it needs to survive a restart: no persistence, and a
+  # memory cap past which the least recently used counters go. The workers never need it.
+  redis:
+    image: redis:8
+    command: >
+      redis-server
+        --save ""
+        --appendonly no
+        --maxmemory 64mb
+        --maxmemory-policy allkeys-lru
+    ports:
+      # For the tests on the host (TQ_TEST_REDIS_URL); the API reaches it as redis:6379.
+      - "127.0.0.1:${TQ_REDIS_PORT:-63790}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  # Runs the migrations (and creates the first admin) once, then exits. Everything else
+  # waits for it, so no process ever sees a half-migrated schema.
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        EXTRAS: api
+    image: pgtaskqueue-api
+    command: ["tq", "migrate"]
+    environment:
+      <<: *env
+      TQ_BOOTSTRAP_ADMIN_USERNAME: ${TQ_BOOTSTRAP_ADMIN_USERNAME:-admin}
+      TQ_BOOTSTRAP_ADMIN_PASSWORD: ${TQ_BOOTSTRAP_ADMIN_PASSWORD:?set TQ_BOOTSTRAP_ADMIN_PASSWORD in .env}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    image: pgtaskqueue-api
+    command: ["tq", "api", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      <<: *env
+      TQ_JWT_SECRET: ${TQ_JWT_SECRET:?set TQ_JWT_SECRET in .env (openssl rand -hex 32)}
+      TQ_CORS_ORIGINS: ${TQ_CORS_ORIGINS:-}
+      TQ_MCP_ALLOWED_HOSTS: ${TQ_MCP_ALLOWED_HOSTS:-}
+      TQ_UI_ENABLED: ${TQ_UI_ENABLED:-true}
+      TQ_ACCOUNT_MAX_WAITING: ${TQ_ACCOUNT_MAX_WAITING:-0}
+      TQ_ACCOUNT_ENQUEUE_PER_MINUTE: ${TQ_ACCOUNT_ENQUEUE_PER_MINUTE:-0}
+      TQ_ACCOUNT_MIN_PRIORITY: ${TQ_ACCOUNT_MIN_PRIORITY:-0}
+      # Request rate limits; docs/auth.md#request-rate-limits. Empty TQ_REDIS_URL turns
+      # them all off.
+      TQ_REDIS_URL: ${TQ_REDIS_URL-redis://redis:6379/0}
+      TQ_RATE_LIMIT: ${TQ_RATE_LIMIT:-}
+      TQ_RATE_LIMIT_ANONYMOUS: ${TQ_RATE_LIMIT_ANONYMOUS:-}
+      TQ_LOGIN_RATE_LIMIT: ${TQ_LOGIN_RATE_LIMIT:-30/minute}
+      TQ_LOGIN_FAILURE_LIMIT: ${TQ_LOGIN_FAILURE_LIMIT:-10/hour}
+      TQ_RATE_LIMIT_FAIL_OPEN: ${TQ_RATE_LIMIT_FAIL_OPEN:-true}
+    ports:
+      - "127.0.0.1:${TQ_API_PORT:-8010}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      # Started first, but not required to be healthy: the API skips the limits while
+      # Redis is down rather than waiting for it.
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  # The general worker: I/O-bound example tasks, many at a time in one event loop.
+  worker:
+    <<: *worker
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    image: pgtaskqueue-worker
+    command: ["tq", "worker", "--executors", "examples.executors.basic,examples.executors.pipeline"]
+    environment:
+      <<: *env
+      TQ_WORKER_SLOTS: ${TQ_WORKER_SLOTS:-20}
+      TQ_WORKER_IDLE_EXIT_SECONDS: ${TQ_WORKER_IDLE_EXIT_SECONDS:-900}
+      TQ_WEBHOOK_SECRET: ${TQ_WEBHOOK_SECRET:-}
+      TQ_WEBHOOK_ALLOW_PRIVATE: ${TQ_WEBHOOK_ALLOW_PRIVATE:-false}
+
+  # A worker with its own dependencies (Pillow) that the API and the general worker never
+  # install, consuming only the names it has executors for, two at a time because the work
+  # is CPU-bound. Copy this service to add another kind of work.
+  worker-image:
+    <<: *worker
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        REQUIREMENTS: examples/workers/image/requirements.txt
+    image: pgtaskqueue-worker-image
+    command: ["tq", "worker", "--executors", "examples.executors.image", "--tasks", "image.*:2"]
+    environment:
+      <<: *env
+      TQ_WORKER_IDLE_EXIT_SECONDS: ${TQ_WORKER_IDLE_EXIT_SECONDS:-900}
+      # This worker makes no outbound calls; the general worker delivers the webhooks.
+      TQ_WEBHOOK_SLOTS: 0
+
+volumes:
+  db-data:

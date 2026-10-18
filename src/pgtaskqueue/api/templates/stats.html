@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block title %}Statistics{% endblock %}
+{% block scripts %}<script type="module" src="{{ root }}/ui/static/stats.js?v={{ static_version }}"></script>{% endblock %}
+{% block main %}<tq-stats></tq-stats>{% endblock %}

@@ -1,0 +1,10 @@
+.git
+.venv
+.env
+.env.*
+!.env.example
+**/__pycache__
+.pytest_cache
+.ruff_cache
+compose.override.yml
+benchmarks/results

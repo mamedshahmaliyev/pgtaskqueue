@@ -1,0 +1,57 @@
+# Puts PgBouncer, in transaction mode, between the API and workers and Postgres.
+#
+#   docker compose -f compose.yml -f compose.pgbouncer.yml up -d --build
+#
+# You do not need this for a handful of processes: each holds a small pool already. It earns
+# its place at hundreds of connections. docs/infrastructure.md#connection-poolers explains
+# the settings.
+x-pooled: &pooled
+  TQ_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tq}:${POSTGRES_PASSWORD:-tq}@pgbouncer:5432/${POSTGRES_DB:-task_queue}
+  TQ_DB_PGBOUNCER: "true"
+
+x-direct: &direct
+  # LISTEN needs a session of its own, so each worker keeps this one connection past the
+  # pooler. Leave it out and workers find tasks by polling alone.
+  TQ_LISTEN_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tq}:${POSTGRES_PASSWORD:-tq}@db:5432/${POSTGRES_DB:-task_queue}
+
+services:
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.26.0-p0
+    environment:
+      DB_HOST: db
+      DB_USER: ${POSTGRES_USER:-tq}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-tq}
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      # Clients the pooler accepts, and server connections it opens per database and user.
+      MAX_CLIENT_CONN: 2000
+      DEFAULT_POOL_SIZE: 40
+    ports:
+      - "127.0.0.1:${TQ_PGBOUNCER_PORT:-64320}:5432"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # `migrate` keeps its direct connection: one process, once, with nothing to pool.
+
+  api:
+    environment:
+      <<: *pooled
+    depends_on:
+      pgbouncer:
+        condition: service_started
+
+  worker:
+    environment:
+      <<: [*pooled, *direct]
+    depends_on:
+      pgbouncer:
+        condition: service_started
+
+  worker-image:
+    environment:
+      <<: [*pooled, *direct]
+    depends_on:
+      pgbouncer:
+        condition: service_started

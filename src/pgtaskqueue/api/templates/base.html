@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}Task Queue{% endblock %} · Task Queue</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{{ root }}/ui/static/app.css?v={{ static_version }}">
+  {% if me is defined %}<script id="tq-me" type="application/json">{{ me | tojson }}</script>{% endif %}
+  {% block scripts %}{% endblock %}
+</head>
+<body data-root="{{ root }}">
+{% if me is defined %}
+  <header class="top">
+    <a class="brand" href="{{ root }}/ui">Task Queue</a>
+    <nav aria-label="Pages">
+      <a href="{{ root }}/ui" {% if page == "dashboard" %}aria-current="page"{% endif %}>Dashboard</a>
+      <a href="{{ root }}/ui/tasks" {% if page == "tasks" %}aria-current="page"{% endif %}>Tasks</a>
+      <a href="{{ root }}/ui/stats" {% if page == "stats" %}aria-current="page"{% endif %}>Statistics</a>
+      {% if "users:manage" in me.permissions %}<a href="{{ root }}/ui/users" {% if page == "users" %}aria-current="page"{% endif %}>Accounts</a>{% endif %}
+    </nav>
+    <form class="who" method="post" action="{{ root }}/ui/logout">
+      <span><strong>{{ me.subject }}</strong> <span class="muted">{{ me.role }}</span></span>
+      <button type="submit" class="quiet">Sign out</button>
+    </form>
+  </header>
+{% endif %}
+  <main>{% block main %}{% endblock %}</main>
+  <footer class="muted">pgtaskqueue {{ version }} · <a href="{{ root }}/docs">API reference</a></footer>
+  <div id="toasts" role="status" aria-live="polite"></div>
+</body>
+</html>

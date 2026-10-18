@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block title %}Tasks{% endblock %}
+{% block scripts %}<script type="module" src="{{ root }}/ui/static/tasks.js?v={{ static_version }}"></script>{% endblock %}
+{% block main %}<tq-task-list></tq-task-list>{% endblock %}
