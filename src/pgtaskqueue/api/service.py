@@ -41,6 +41,10 @@ from pgtaskqueue.settings import Settings
 P = Permission
 RESERVED_PREFIX = "tq."
 TASK_TYPE_CACHE_SECONDS = 5.0
+_LOOSER_LIMITS = (
+    "this account may not give limits looser than its own. Set each limit at or below "
+    "yours (GET /v1/auth/limits)."
+)
 
 
 class ApiError(Exception):
@@ -397,12 +401,12 @@ class Service:
     # ------------------------------------------------------------------ accounts
     #
     # `users:manage` lets an account manage others, but never past itself. It may give a
-    # role only if it holds every permission that role grants, and ACL patterns only out of
-    # its own; it may change, reset or remove only an account it could have created. An
-    # admin holds every permission and has `*`, so none of this limits it. A manager holds
-    # neither `tasks:work` nor admin's, so it can make neither a worker nor an admin, and
-    # cannot touch one. And no account loosens its own role, ACL or limits: that takes
-    # someone else.
+    # role only if it holds every permission that role grants, ACL patterns only out of its
+    # own, and limits only as tight as its own; it may change, reset or remove only an
+    # account it could have created. An admin holds every permission and has `*`, and has no
+    # one above it to ask, so none of this limits it. A manager holds neither `tasks:work`
+    # nor admin's, so it can make neither a worker nor an admin, and cannot touch one. And no
+    # account loosens its own role, ACL or limits: that takes someone else.
 
     @staticmethod
     def _grantable(who: Principal, role: str, queues: Sequence[str], names: Sequence[str]) -> bool:
@@ -412,24 +416,34 @@ class Service:
             and _within(who.task_names, names)
         )
 
-    def _may_manage(self, who: Principal, user: User) -> bool:
-        return self._grantable(who, user.role, user.queues, user.task_names)
+    async def _reach(self, who: Principal) -> Limits | None:
+        """The loosest limits `who` may give an account: its own. None for an admin."""
+        if who.permissions >= set(Permission):
+            return None
+        return await self.limits.of(who.subject)
+
+    def _may_manage(self, who: Principal, reach: Limits | None, user: User) -> bool:
+        return self._grantable(who, user.role, user.queues, user.task_names) and (
+            reach is None or self.limits.combine(user).within(reach)
+        )
 
     async def _account(self, who: Principal, username: str) -> User:
         self.need(who, P.USERS_MANAGE)
         user = await self.users.get(username)
         if user is None:
             raise NotFound("no such user")
-        if not self._may_manage(who, user):
+        if not self._may_manage(who, await self._reach(who), user):
             raise Forbidden(
-                f"{username!r} has a role or ACL that reaches beyond this account's; ask an admin"
+                f"{username!r} has a role, ACL or limits that reach beyond this account's; "
+                "ask an admin"
             )
         return user
 
     async def accounts(self, who: Principal) -> list[tuple[User, bool]]:
         """Every account, and whether `who` may change it."""
         self.need(who, P.USERS_MANAGE)
-        return [(user, self._may_manage(who, user)) for user in await self.users.list()]
+        reach = await self._reach(who)
+        return [(user, self._may_manage(who, reach, user)) for user in await self.users.list()]
 
     def roles(self, who: Principal) -> list[dict[str, Any]]:
         self.need(who, P.USERS_MANAGE)
@@ -446,6 +460,10 @@ class Service:
         self.need(who, P.USERS_MANAGE)
         if not self._grantable(who, req.role, req.queues, req.task_names):
             raise Forbidden("this account may not give a role or ACL that reaches beyond its own")
+        limits = {key: getattr(req, key) for key in LIMITS}
+        reach = await self._reach(who)
+        if reach is not None and not self.limits.resolve(limits).within(reach):
+            raise Forbidden(_LOOSER_LIMITS)
         try:
             return await self.users.create(
                 req.username,
@@ -454,7 +472,7 @@ class Service:
                 kind=req.kind,
                 queues=req.queues,
                 task_names=req.task_names,
-                limits={key: getattr(req, key) for key in LIMITS},
+                limits=limits,
             )
         except UserError as exc:
             raise Invalid(str(exc)) from exc
@@ -476,6 +494,11 @@ class Service:
         names = fields.get("task_names") or current.task_names
         if not self._grantable(who, role, queues, names):
             raise Forbidden("this account may not give a role or ACL that reaches beyond its own")
+        reach = await self._reach(who)
+        if reach is not None and not self.limits.resolve({**own_limits(current), **limits}).within(
+            reach
+        ):
+            raise Forbidden(_LOOSER_LIMITS)
         try:
             user = await self.users.update(username, limits=limits, **fields)
         except UserError as exc:

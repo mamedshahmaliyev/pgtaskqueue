@@ -318,6 +318,57 @@ async def test_a_manager_gives_only_acl_patterns_it_holds(api, auth, db):
     ).status_code == 200
 
 
+async def test_a_manager_gives_no_limits_looser_than_its_own(api, auth, db):
+    own = {"max_waiting": 10, "max_running": 2, "enqueue_per_minute": 30, "min_priority": 50}
+    await account(db, "mia", role="manager", **own)
+    mia = auth("mia", "manager")
+    body = {"username": "sam", "password": "sam-password", **own, "max_running": 1}
+    # None takes the default, which here is no limit: as loose as 0.
+    for key, looser in (
+        ("max_waiting", 11),
+        ("max_waiting", 0),
+        ("max_waiting", None),
+        ("max_running", 3),
+        ("enqueue_per_minute", 0),
+        ("min_priority", 49),
+    ):
+        response = await api.post("/v1/users", json={**body, key: looser}, headers=mia)
+        assert response.status_code == 403, (key, looser)
+    assert (await api.post("/v1/users", json=body, headers=mia)).status_code == 201
+
+    # Nor by a later edit, while one that stays within is fine.
+    assert (
+        await api.patch("/v1/users/sam", json={"max_running": 0}, headers=mia)
+    ).status_code == 403
+    assert (
+        await api.patch("/v1/users/sam", json={"max_running": 2}, headers=mia)
+    ).status_code == 200
+
+    # An account looser than mia is out of reach whole, as one with a wider ACL is: taking
+    # over its password would be a way round mia's own limits.
+    await account(db, "otto", role="operator")
+    listed = {
+        u["username"]: u["manageable"] for u in (await api.get("/v1/users", headers=mia)).json()
+    }
+    assert listed == {"mia": True, "otto": False, "sam": True}
+    password = {"password": "taken-over-now"}
+    assert (
+        await api.post("/v1/users/otto/password", json=password, headers=mia)
+    ).status_code == 403
+    assert (await api.delete("/v1/users/otto", headers=mia)).status_code == 403
+
+
+async def test_a_manager_on_default_limits_gives_at_most_the_defaults(db, auth):
+    await account(db, "mia", role="manager")
+    async with serving(db, make_settings(account_max_running=2)) as api:
+        mia = auth("mia", "manager")
+        body = {"username": "sam", "password": "sam-password"}
+        looser = await api.post("/v1/users", json={**body, "max_running": 0}, headers=mia)
+        assert looser.status_code == 403
+        # Unset, sam takes the same default mia has.
+        assert (await api.post("/v1/users", json=body, headers=mia)).status_code == 201
+
+
 async def test_account_management_needs_the_permission(api, auth):
     otto = auth("otto", "operator")
     for method, path in (("GET", "/v1/users"), ("GET", "/v1/roles"), ("GET", "/v1/users/x/limits")):

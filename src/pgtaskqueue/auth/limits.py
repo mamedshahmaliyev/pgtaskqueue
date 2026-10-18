@@ -13,6 +13,7 @@ identity provider has no row here and gets the defaults.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -107,6 +108,16 @@ class Limits:
             )
         return asked
 
+    def within(self, bound: Limits) -> bool:
+        """Whether every limit here is at least as tight as `bound`'s. What an account that
+        `bound` limits may give another: otherwise making an account would be a way round
+        one's own limits. No limit (0) is looser than any number."""
+        for key in ("max_waiting", "max_running", "enqueue_per_minute"):
+            mine, cap = getattr(self, key), getattr(bound, key)
+            if cap and not 0 < mine <= cap:
+                return False
+        return self.min_priority >= bound.min_priority
+
     def as_dict(self) -> dict[str, int]:
         return asdict(self)
 
@@ -132,10 +143,13 @@ class AccountLimits:
         self.settings = settings
 
     def combine(self, user: User | None) -> Limits:
+        return self.resolve(own_limits(user))
+
+    def resolve(self, own: Mapping[str, int | None]) -> Limits:
+        """Limits as an account would have them with `own` set: the defaults where None."""
         defaults = Limits.defaults(self.settings)
-        own = own_limits(user)
         return Limits(
-            **{key: getattr(defaults, key) if own[key] is None else own[key] for key in LIMITS}
+            **{key: getattr(defaults, key) if own.get(key) is None else own[key] for key in LIMITS}
         )
 
     async def of(self, subject: str) -> Limits:

@@ -140,16 +140,23 @@ manager could create an admin and sign in as it.
 - **ACLs.** It may give only patterns that are in its own ACL, compared literally: an
   account with `billing.*` may give `billing.*`, not `billing.invoice.*`. An account
   with `*` may give anything.
+- **[Limits](#limits).** It may give each limit only as tight as its own effective one,
+  default included: at most its `max_waiting`, `max_running` and `enqueue_per_minute`, at
+  least its `min_priority`. Where its own is a number, `0` (no limit) and an unset value
+  that takes a default of `0` are looser, so it must give a number. Where its own is no
+  limit, it may give anything. Otherwise a manager on 2 running tasks could create an
+  account with no limit and use that one.
 - **Existing accounts.** It may change, set the password of, or delete only an account it
-  could have created: one whose role and ACL pass the two checks above. Any other is a 403
-  with "ask an admin". `GET /v1/users` marks each account with `manageable`, and the UI
+  could have created: one whose role, ACL and limits pass the three checks above. Any other
+  is a 403 with "ask an admin". `GET /v1/users` marks each account with `manageable`, and the UI
   shows no buttons for the others.
 - **Its own account.** No account may change its own role, disable itself or delete
   itself. Only an account with every permission (an `admin` with `*`) may change its own
   ACL or limits; for anyone else a limit it could lift itself would limit nothing. Anyone
   may change their own password.
 
-An `admin` with the ACL `*` passes every check, so none of this limits it.
+An `admin` with the ACL `*` passes every check, so none of this limits it. That includes
+limits: an admin may give any, whatever its own.
 
 A role or ACL change takes effect when the account's next access token is issued, as with
 [revocation](#token-lifetimes-and-revocation); disabling an account or setting its
