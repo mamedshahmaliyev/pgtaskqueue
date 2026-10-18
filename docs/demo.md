@@ -152,8 +152,9 @@ curl -s $URL/v1/tasks -H "Authorization: Bearer $TOKEN" \
        "callback": {"url": "https://webhook.site/<your-id>"}}'
 ```
 
-Callbacks to private and loopback addresses are refused. [api.md](api.md#webhooks) has the
-body and how to check its signature.
+A callback to a private or loopback address is accepted with the task but never sent: the
+worker refuses it, and the delivery fails. [api.md](api.md#webhooks) has the body and how
+to check its signature.
 
 ## MCP
 
