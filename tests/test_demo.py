@@ -7,7 +7,11 @@ from examples.demo import seed as demo
 from sqlalchemy import text
 
 from pgtaskqueue import NewTask, Schedule, Schedules, TaskQueue
+from pgtaskqueue import seed as base
 from pgtaskqueue.auth import UserService
+from pgtaskqueue.enums import TERMINAL_STATUSES
+from pgtaskqueue.monitor import Monitor
+from tests.helpers import make_settings
 
 
 async def test_reset_keeps_admins_and_workers_and_seeds_the_demo(db, queue: TaskQueue):
@@ -28,6 +32,26 @@ async def test_reset_keeps_admins_and_workers_and_seeds_the_demo(db, queue: Task
     operator = await users.get("demo-operator")
     assert operator.task_names == list(demo.TASK_NAMES)
     assert operator.max_running == demo.STAFF_LIMITS["max_running"]
+
+
+async def test_the_paused_queue_uses_up_no_demo_account_running_limit(db, queue: TaskQueue):
+    await demo.reset(db)
+    parked = [
+        t
+        for t in await queue.list(limit=10_000)
+        if t.queue_name == base.PAUSED_QUEUE and t.status not in TERMINAL_STATUSES
+    ]
+    assert parked
+    assert {t.created_by for t in parked} == {demo.PARKED_OWNER}
+
+
+async def test_repair_resumes_the_default_queue(db):
+    monitor = Monitor(db, make_settings())
+    await monitor.set_paused("default", True, by="demo-operator")
+    assert (await demo.repair(db))["default_resumed"] is True
+    queues = {q["name"]: q["paused"] for q in await monitor.list_queues()}
+    assert queues["default"] is False
+    assert (await demo.repair(db))["default_resumed"] is False
 
 
 async def test_the_demo_accounts_leave_out_the_executors_a_stranger_could_misuse():

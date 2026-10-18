@@ -58,17 +58,22 @@ call means slow down.
 
 The account limits apply to accounts the manager makes, too. A manager may not give an
 account limits looser than its own, so `demo-manager` can create an account with a
-running limit of 2, but not 10 and not "none".
+running limit of 2, but not 10 and not "none". Nor may it give task names beyond its own:
+name them from the [list below](#task-names), such as `demo.echo` and `demo.sleep`. The
+default, `*`, is refused.
 
 ### What is put back, and when
 
 - **Every hour**, the queue is emptied: tasks, logs, paused queues, schedules made through
   the API, and every account visitors made. Then the demo data is seeded again: a few
-  hundred finished tasks over the last 24 hours, some waiting and scheduled, three running,
-  and a paused queue named `bulk`.
+  hundred finished tasks over the last 24 hours, some tasks waiting, scheduled and running,
+  and a paused queue named `bulk`. For a minute or two after a reset, the seeded tasks
+  count against the accounts' running limits, so new tasks may be held until they finish.
 - **Every minute**, the four accounts get their password, role, ACL and limits back. If
   someone changes the password or disables an account, wait a minute and sign in again.
   Visitors may add up to 10 accounts and 10 schedules; past that, the newest are removed.
+  If the queue `default` is paused, it is resumed, because pausing it holds everyone's
+  tasks. Pause `bulk` or a queue of your own instead.
 
 ## Task names
 
@@ -99,8 +104,9 @@ Open https://pgtaskqueue.mmdsh.org and sign in. [ui.md](ui.md) describes every p
 3. **As `demo-operator`**: every task. Pause and resume the queue `bulk` and watch its
    tasks wait. Restart a failed task. Enqueue 8 `demo.sleep` tasks and see 4 run while the
    others are **held**.
-4. **As `demo-manager`**: **Accounts**. Create an account with the role `submitter` and
-   limits no looser than your own, then sign in as it.
+4. **As `demo-manager`**: **Accounts**. Create an account with the role `submitter`, task
+   names from the demo's list (such as `demo.echo, demo.sleep`), and limits no looser than
+   your own. Then sign in as it.
 
 ## The HTTP API
 
@@ -169,7 +175,9 @@ This section is for whoever hosts a demo. Two files in [examples/demo](../exampl
 make it:
 
 - `seed.py`: the four accounts, their limits and ACL, the hourly reset and the
-  minute-by-minute repair.
+  minute-by-minute repair. It reuses `tq seed`'s data, minus the names outside the ACL,
+  and gives the tasks on the paused queue to an owner with no account (`demo-seed`), so
+  they hold back no visitor's tasks.
 - `reset.py`: the process that runs them. It refuses to start unless
   `DEMO_RESET_DATABASE` names the database `TQ_DATABASE_URL` points at, because it empties
   the queue.

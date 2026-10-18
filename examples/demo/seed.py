@@ -30,6 +30,7 @@ from pgtaskqueue import seed as base
 from pgtaskqueue.auth.passwords import verify_password
 from pgtaskqueue.auth.users import UserService
 from pgtaskqueue.db import Database
+from pgtaskqueue.enums import TERMINAL_STATUSES
 from pgtaskqueue.models import Task
 from pgtaskqueue.settings import Settings
 
@@ -114,6 +115,22 @@ _CAP_SCHEDULES = text(
 _DROP_NAMES = text("DELETE FROM tq_tasks WHERE name = ANY(:names)").bindparams(
     bindparam("names", type_=ARRAY(Text))
 )
+# Pending tasks count against `max_running`, and those on the paused queue stay pending.
+# Left with demo-operator, they would use up its running limit until someone resumed the
+# queue, and hold back every task it enqueued. An owner with no account takes the defaults
+# and holds back no visitor's.
+PARKED_OWNER = "demo-seed"
+_MOVE_PARKED = text(
+    "UPDATE tq_tasks SET created_by = :owner WHERE queue_name = :queue AND status <> ALL(:done)"
+).bindparams(bindparam("done", type_=ARRAY(Text)))
+# Pausing `default` holds every visitor's tasks, so it does not last past the next repair.
+_RESUME_DEFAULT = text(
+    """
+    UPDATE tq_queues SET paused = false, note = 'resumed by the demo reset',
+                         updated_by = 'demo-reset', updated_at = now()
+    WHERE name = 'default' AND paused
+    """
+)
 
 
 def allowed(name: str) -> bool:
@@ -166,10 +183,12 @@ async def repair(db: Database) -> dict[str, Any]:
             _CAP_ACCOUNTS, {"kept": list(KEPT_ROLES), "demo": _NAMES, "cap": MAX_EXTRA_ACCOUNTS}
         )
         schedules = await tx.execute(_CAP_SCHEDULES, {"cap": MAX_SCHEDULES})
+        resumed = await tx.execute(_RESUME_DEFAULT)
     return {
         "fixed": fixed,
         "accounts_removed": accounts.rowcount,
         "schedules_removed": schedules.rowcount,
+        "default_resumed": resumed.rowcount > 0,
     }
 
 
@@ -186,5 +205,9 @@ async def reset(db: Database, settings: Settings | None = None) -> dict[str, Any
     outside = sorted({kind.name for kind in base.KINDS if not allowed(kind.name)})
     async with db.transaction() as tx:
         await tx.execute(_DROP_NAMES, {"names": outside})
+        await tx.execute(
+            _MOVE_PARKED,
+            {"owner": PARKED_OWNER, "queue": base.PAUSED_QUEUE, "done": sorted(TERMINAL_STATUSES)},
+        )
         tasks = await tx.scalar(select(func.count()).select_from(Task))
     return {"tasks": tasks, **{key: done[key] for key in ("running", "parked")}}
