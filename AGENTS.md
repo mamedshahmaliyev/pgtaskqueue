@@ -307,6 +307,7 @@ describes it.
 | [docs/analytics.md](docs/analytics.md) | SQL for the tables |
 | [docs/benchmarks.md](docs/benchmarks.md) | Measured numbers and how to reproduce them |
 | [docs/comparison.md](docs/comparison.md) | Against Celery, other PostgreSQL queues, workflow engines |
+| [docs/demo.md](docs/demo.md) | The public demo: accounts, limits, resets (`examples/demo`) |
 
 Rules for the docs:
 

@@ -159,6 +159,9 @@ by a worker that does not exist. A real worker's maintenance loop finds them sta
 > The demo password is in this page. Do not seed a database that anyone else can reach,
 > and delete the five accounts before a database is used for real work.
 
+For a demo that strangers use, [demo.md](demo.md) has accounts with limits and a process
+that resets it every hour.
+
 ## How the session works
 
 A browser cannot be trusted to keep a token the way a service can: a token that JavaScript

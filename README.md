@@ -6,6 +6,10 @@ Tasks are rows. Workers claim them with `FOR UPDATE SKIP LOCKED` and run them wi
 `asyncio`. There is no broker, no result backend and no scheduler process: one database,
 your workers, and optionally an HTTP API.
 
+To try it without installing anything, use the public demo at
+<https://pgtaskqueue.mmdsh.org>. [docs/demo.md](docs/demo.md) has the accounts and what to
+try.
+
 ```python
 from pgtaskqueue import TaskContext, task
 
@@ -307,6 +311,7 @@ measured, and how to run the same benchmarks on your hardware in ten minutes.
 | [Auth](docs/auth.md) | Tokens, roles, ACLs, signing keys, external identity providers |
 | [MCP server](docs/mcp.md) | Connecting an AI assistant |
 | [Web UI](docs/ui.md) | The pages, what each role sees, demo data, how the browser session works |
+| [Public demo](docs/demo.md) | The demo's accounts, limits and resets, and how to host one |
 | [Infrastructure](docs/infrastructure.md) | Compose, images, PostgreSQL settings, connections, deploys, backups |
 | [Configuration](docs/configuration.md) | Every `TQ_` setting and every `tq` command |
 | [Analytics](docs/analytics.md) | SQL for throughput, durations, failures, tenants, dashboards |
