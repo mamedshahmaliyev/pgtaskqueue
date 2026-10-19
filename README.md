@@ -6,9 +6,7 @@ Tasks are rows. Workers claim them with `FOR UPDATE SKIP LOCKED` and run them wi
 `asyncio`. There is no broker, no result backend and no scheduler process: one database,
 your workers, and optionally an HTTP API.
 
-To try it without installing anything, use the public demo at
-<https://pgtaskqueue.mmdsh.org>. [docs/demo.md](docs/demo.md) has the accounts and what to
-try.
+To try it without installing anything, use the [public demo](#try-the-demo).
 
 ```python
 from pgtaskqueue import TaskContext, task
@@ -36,6 +34,52 @@ SELECT metadata->>'tenant' AS tenant, count(*), avg(spent_seconds)
 FROM tq_tasks WHERE name = 'report.build' AND completed_at > now() - interval '7 days'
 GROUP BY 1;
 ```
+
+## Try the demo
+
+A running copy, with the web UI, the HTTP API, the MCP server and two workers:
+
+| | |
+|---|---|
+| Web UI | <https://pgtaskqueue.mmdsh.org> |
+| API reference | <https://pgtaskqueue.mmdsh.org/docs> |
+| MCP server | `https://pgtaskqueue.mmdsh.org/mcp` |
+
+Sign in with one of these accounts. The password for all of them is **`demo-password`**.
+
+| Account | Role | What it can do |
+|---|---|---|
+| `demo-manager` | manager | What an operator can, and manage accounts no wider than its own |
+| `demo-operator` | operator | See and manage every task, pause queues, manage schedules |
+| `demo-submitter` | submitter | Enqueue tasks, and see and manage only its own |
+| `demo-viewer` | viewer | See everything, change nothing |
+
+From a terminal:
+
+```bash
+URL=https://pgtaskqueue.mmdsh.org
+TOKEN=$(curl -s $URL/v1/auth/token -d grant_type=password \
+  -d username=demo-submitter -d password=demo-password \
+  | python3 -c 'import json, sys; print(json.load(sys.stdin)["access_token"])')
+
+curl -s $URL/v1/tasks -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"name": "demo.flaky", "payload": {"fail_times": 1}}'
+```
+
+Things to know before you try it:
+
+- **It is public and shared.** Everyone uses the same accounts and sees the same tasks. Put
+  nothing private in a payload.
+- **It is reset every hour.** Your tasks, schedules and accounts are deleted, and the
+  demo data is seeded again.
+- **It is limited.** Each account may have only a few tasks waiting and running, and enqueue
+  only a few a minute. A **429** means wait a minute.
+- **It is not a benchmark.** It runs on a small shared server. Please do not load-test it;
+  run your own copy with the [quick start](#quick-start) instead.
+
+[docs/demo.md](docs/demo.md) has the limits, the task names you can run, what to try in each
+role, webhooks and MCP.
 
 ## Why keep the queue in PostgreSQL
 
